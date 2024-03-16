@@ -1,9 +1,1 @@
-{
-  "version": 2,
-  "routes": [
-    { "handle": "filesystem" },
-    { "src": "/video", "dest": "/api/video" },
-    { "src": "/audio", "dest": "/api/audio" },
-    { "src": "/(.*)", "dest": "/app.js" }
-  ]
-}
+{ "version": 2, "rewrites": [{ "source": "/(.*)", "destination": "/api" }] }
