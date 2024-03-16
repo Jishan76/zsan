@@ -1,17 +1,9 @@
 {
   "version": 2,
   "routes": [
-    {
-      "src": "/video",
-      "dest": "/api/video"
-    },
-    {
-      "src": "/audio",
-      "dest": "/api/audio"
-    },
-    {
-      "src": "/(.*)",
-      "dest": "/app.js"
-    }
+    { "handle": "filesystem" },
+    { "src": "/video", "dest": "/api/video" },
+    { "src": "/audio", "dest": "/api/audio" },
+    { "src": "/(.*)", "dest": "/app.js" }
   ]
 }
