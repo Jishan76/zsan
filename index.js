@@ -28,13 +28,18 @@ app.get('/search', async (req, res) => {
     console.log('Streaming audio for:', songTitle);
 
     // Get Base64-encoded MP3 of the video
-    const { base64 } = await getVideoMP3Base64(videoURL);
+    const videoInfo = await getVideoMP3Base64(videoURL);
+    
+    if (!videoInfo || !videoInfo.base64) {
+      return res.status(404).json({ error: "Video audio not available or cannot be retrieved" });
+    }
 
     // Convert Base64 to binary buffer
-    const buffer = Buffer.from(base64, 'base64');
+    const buffer = Buffer.from(videoInfo.base64, 'base64');
 
     // Set content headers for streaming
     res.set('Content-Type', 'audio/mpeg');
+    res.set('Content-Disposition', `inline; filename="${songTitle}.mp3"`);
 
     // Stream the audio buffer to the client
     const audioStream = new Readable();
