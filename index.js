@@ -1,84 +1,59 @@
 const express = require('express');
+const { getVideoMP3Base64 } = require('yt-get');
 const ytSearch = require('yt-search');
-const ytdl = require('ytdl-core');
-const axios = require('axios');
+const { Readable } = require('stream');
+
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-app.get('/video', async (req, res) => {
-  const query = req.query.query;
-  
-  if (!query) {
-    return res.status(400).send('Missing query parameter');
+app.get('/search', async (req, res) => {
+  const searchTerm = req.query.q;
+
+  if (!searchTerm) {
+    return res.status(400).json({ error: "Please provide a search term" });
   }
 
   try {
-    // Search for videos using yt-search
-    const { videos } = await ytSearch(query);
-    
-    if (!videos.length) {
-      return res.status(404).send('No videos found');
+    // Perform a YouTube search using the yt-search library
+    const searchResults = await ytSearch(searchTerm);
+    if (!searchResults.videos || searchResults.videos.length === 0) {
+      return res.status(404).json({ error: "No search results found for the given term" });
     }
 
-    // Get the first video
-    const firstVideo = videos[0];
+    // Get the first search result and its video URL
+    const firstResult = searchResults.videos[0];
+    const videoURL = firstResult.url;
+    const songTitle = firstResult.title;
 
-    // Get video details
-    const videoInfo = await ytdl.getInfo(firstVideo.url);
+    console.log('Streaming audio for:', songTitle);
 
-    // Get the highest quality video format
-    const videoFormat = ytdl.chooseFormat(videoInfo.formats, { quality: 'highestvideo' });
-    if (!videoFormat) {
-      return res.status(404).send('No video found');
-    }
+    // Get Base64-encoded MP3 of the video
+    const { base64 } = await getVideoMP3Base64(videoURL);
 
-    const videoUrl = videoFormat.url;
+    // Convert Base64 to binary buffer
+    const buffer = Buffer.from(base64, 'base64');
 
-    // Redirect the user to the direct video URL
-    res.redirect(videoUrl);
+    // Set content headers for streaming
+    res.set('Content-Type', 'audio/mpeg');
+
+    // Stream the audio buffer to the client
+    const audioStream = new Readable();
+    audioStream._read = () => {}; // Necessary for Readable streams
+    audioStream.push(buffer);
+    audioStream.push(null); // Signal the end of the stream
+
+    audioStream.pipe(res);
+
+    audioStream.on('end', () => {
+      console.log('Audio stream complete.');
+    });
+
   } catch (error) {
     console.error('Error:', error);
-    res.status(500).send('Internal Server Error');
-  }
-});
-
-app.get('/audio', async (req, res) => {
-  const query = req.query.query;
-  
-  if (!query) {
-    return res.status(400).send('Missing query parameter');
-  }
-
-  try {
-    // Search for videos using yt-search
-    const { videos } = await ytSearch(query);
-    
-    if (!videos.length) {
-      return res.status(404).send('No videos found');
-    }
-
-    // Get the first video
-    const firstVideo = videos[0];
-
-    // Get video details
-    const videoInfo = await ytdl.getInfo(firstVideo.url);
-
-    // Get the highest quality audio format
-    const audioFormat = ytdl.chooseFormat(videoInfo.formats, { quality: 'highestaudio' });
-    if (!audioFormat) {
-      return res.status(404).send('No audio found');
-    }
-
-    const audioUrl = audioFormat.url;
-
-    // Redirect the user to the direct audio URL
-    res.redirect(audioUrl);
-  } catch (error) {
-    console.error('Error:', error);
-    res.status(500).send('Internal Server Error');
+    res.status(500).json({ error: "An error occurred while processing your request. Please try again." });
   }
 });
 
 app.listen(PORT, () => {
-  console.log(`Server is running on http://localhost:${PORT}`);
+  console.log(`Server is running on port ${PORT}`);
 });
