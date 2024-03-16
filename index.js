@@ -40,6 +40,11 @@ app.get('/download-video', async (req, res) => {
     // Get the first video
     const firstVideo = videos[0];
 
+    // Check if video is valid
+    if (!firstVideo.url) {
+      return res.status(404).json({ error: 'Invalid video' });
+    }
+
     // Create a unique file name for the video
     const videoFileName = `video_${Date.now()}.mp4`;
     const videoFilePath = videoFolderPath + videoFileName;
@@ -79,6 +84,11 @@ app.get('/download-audio', async (req, res) => {
 
     // Get the first video
     const firstVideo = videos[0];
+
+    // Check if video is valid
+    if (!firstVideo.url) {
+      return res.status(404).json({ error: 'Invalid video' });
+    }
 
     // Get video details
     const videoInfo = await ytdl.getInfo(firstVideo.url);
