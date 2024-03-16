@@ -1,6 +1,7 @@
-const express = require('express');
-const ytSearch = require('yt-search');
-const ytdl = require('ytdl-core');
+import express from 'express';
+import ytSearch from 'yt-search';
+import ytdl from 'ytdl-core';
+
 const app = express();
 const PORT = process.env.PORT || 3000;
 
