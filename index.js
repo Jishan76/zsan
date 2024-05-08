@@ -1,7 +1,7 @@
 const express = require('express');
 const ytdl = require('ytdl-core');
 const ytSearch = require('yt-search');
-const fs = require('fs');
+const axios = require('axios');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -25,22 +25,19 @@ app.get('/search', async (req, res) => {
     const videoURL = firstResult.url;
     const songTitle = firstResult.title;
 
-    console.log('Downloading audio for:', songTitle);
+    console.log('Streaming audio for:', songTitle);
 
-    // Download the audio stream using ytdl-core and save it to a temporary file
-    const audioPath = `./${songTitle}.mp3`;
-    ytdl(videoURL, { filter: 'audioonly' })
-      .pipe(fs.createWriteStream(audioPath))
-      .on('finish', () => {
-        // Set content headers for streaming
-        res.set('Content-Type', 'audio/mpeg');
-        res.set('Content-Disposition', `attachment; filename="${songTitle}.mp3"`); // Force download as an attachment
+    // Fetch the audio stream using Axios and directly pipe it to the response
+    const response = await axios.get(videoURL, { responseType: 'stream' });
 
-        // Stream the audio file directly to the client
-        fs.createReadStream(audioPath).pipe(res);
+    // Set content headers for streaming
+    res.set('Content-Type', 'audio/mpeg');
+    res.set('Content-Disposition', `attachment; filename="${songTitle}.mp3"`); // Force download as an attachment
 
-        console.log('Audio streaming complete.');
-      });
+    // Pipe the audio stream directly to the response
+    response.data.pipe(res);
+
+    console.log('Audio streaming complete.');
 
   } catch (error) {
     console.error('Error:', error);
