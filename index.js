@@ -1,5 +1,5 @@
 const express = require('express');
-const { getVideoMP3Base64 } = require('yt-get');
+const ytdl = require('ytdl-core');
 const ytSearch = require('yt-search');
 const { Readable } = require('stream');
 
@@ -27,26 +27,14 @@ app.get('/search', async (req, res) => {
 
     console.log('Streaming audio for:', songTitle);
 
-    // Get Base64-encoded MP3 of the video
-    const videoInfo = await getVideoMP3Base64(videoURL);
-    
-    if (!videoInfo || !videoInfo.base64) {
-      return res.status(404).json({ error: "Video audio not available or cannot be retrieved" });
-    }
-
-    // Convert Base64 to binary buffer
-    const buffer = Buffer.from(videoInfo.base64, 'base64');
+    // Get the audio stream using ytdl-core
+    const audioStream = ytdl(videoURL, { filter: 'audioonly' });
 
     // Set content headers for streaming
     res.set('Content-Type', 'audio/mpeg');
     res.set('Content-Disposition', `inline; filename="${songTitle}.mp3"`);
 
-    // Stream the audio buffer to the client
-    const audioStream = new Readable();
-    audioStream._read = () => {}; // Necessary for Readable streams
-    audioStream.push(buffer);
-    audioStream.push(null); // Signal the end of the stream
-
+    // Stream the audio directly to the client
     audioStream.pipe(res);
 
     audioStream.on('end', () => {
