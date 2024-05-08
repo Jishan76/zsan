@@ -1,6 +1,7 @@
 const express = require('express');
 const ytdl = require('ytdl-core');
 const ytSearch = require('yt-search');
+const fs = require('fs');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -24,21 +25,22 @@ app.get('/search', async (req, res) => {
     const videoURL = firstResult.url;
     const songTitle = firstResult.title;
 
-    console.log('Streaming audio for:', songTitle);
+    console.log('Downloading audio for:', songTitle);
 
-    // Get the audio stream using ytdl-core
-    const audioStream = ytdl(videoURL, { filter: 'audioonly' });
+    // Download the audio stream using ytdl-core and save it to a temporary file
+    const audioPath = `./${songTitle}.mp3`;
+    ytdl(videoURL, { filter: 'audioonly' })
+      .pipe(fs.createWriteStream(audioPath))
+      .on('finish', () => {
+        // Set content headers for streaming
+        res.set('Content-Type', 'audio/mpeg');
+        res.set('Content-Disposition', `attachment; filename="${songTitle}.mp3"`); // Force download as an attachment
 
-    // Set content headers for streaming
-    res.set('Content-Type', 'audio/mpeg');
-    res.set('Content-Disposition', `attachment; filename="${songTitle}.mp3"`); // Force download as an attachment
+        // Stream the audio file directly to the client
+        fs.createReadStream(audioPath).pipe(res);
 
-    // Stream the audio directly to the client
-    audioStream.pipe(res);
-
-    audioStream.on('end', () => {
-      console.log('Audio stream complete.');
-    });
+        console.log('Audio streaming complete.');
+      });
 
   } catch (error) {
     console.error('Error:', error);
@@ -49,4 +51,3 @@ app.get('/search', async (req, res) => {
 app.listen(PORT, () => {
   console.log(`Server is running on port ${PORT}`);
 });
-      
