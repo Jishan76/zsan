@@ -1,7 +1,6 @@
 const express = require('express');
 const ytdl = require('ytdl-core');
 const ytSearch = require('yt-search');
-const { Readable } = require('stream');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -32,7 +31,7 @@ app.get('/search', async (req, res) => {
 
     // Set content headers for streaming
     res.set('Content-Type', 'audio/mpeg');
-    res.set('Content-Disposition', `inline; filename="${songTitle}.mp3"`);
+    res.set('Content-Disposition', `attachment; filename="${songTitle}.mp3"`); // Force download as an attachment
 
     // Stream the audio directly to the client
     audioStream.pipe(res);
@@ -50,3 +49,4 @@ app.get('/search', async (req, res) => {
 app.listen(PORT, () => {
   console.log(`Server is running on port ${PORT}`);
 });
+      
