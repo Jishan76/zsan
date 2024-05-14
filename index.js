@@ -17,10 +17,12 @@ module.exports = {
     },
 
     onStart: async function ({ message, args, api }) {
+        console.log("Command started execution");
         // React with clock emoji to indicate loading
         await api.setMessageReaction("⏰", message.messageID);
 
         if (args.length < 1) {
+            console.log("Invalid argument length");
             await api.removeMessageReaction("⏰", message.messageID);
             return message.reply(`Please provide character ID or name, name, and slogan separated by colons.\nExample: -coverimage Pikachu:John:My Slogan`);
         }
@@ -29,20 +31,26 @@ module.exports = {
         const parts = input.split(':').map(part => part.trim());
         
         if (parts.length < 3) {
+            console.log("Invalid argument format");
             await api.removeMessageReaction("⏰", message.messageID);
             return message.reply(`Invalid format. Please provide character ID or name, name, and slogan separated by colons.\nExample: -coverimage Pikachu:John:My Slogan`);
         }
 
         const [characterInput, name, slogan] = parts;
 
+        console.log("Arguments:", characterInput, name, slogan);
+
         // Helper function to get character ID
         async function getCharacterId(character) {
+            console.log("Fetching character ID");
             const searchUrl = `https://nguyenmanh.name.vn/api/searchAvt?key=${encodeURIComponent(character)}`;
             try {
                 const response = await axios.get(searchUrl);
                 if (response.status === 200 && response.data.result && response.data.result.ID) {
+                    console.log("Character ID found:", response.data.result.ID);
                     return response.data.result.ID;
                 } else {
+                    console.error("Character not found");
                     throw new Error("Character not found");
                 }
             } catch (error) {
@@ -52,6 +60,7 @@ module.exports = {
         }
 
         async function generateCoverImage(characterId) {
+            console.log("Generating cover image");
             const apiKey = "APyDXmib";
             const apiUrl = `https://nguyenmanh.name.vn/api/avtWibu4?id=${characterId}&tenchinh=${encodeURIComponent(name)}&tenphu=${encodeURIComponent(slogan)}&apikey=${apiKey}`;
             
@@ -70,6 +79,8 @@ module.exports = {
 
                     // Wait for the write stream to finish
                     writer.on('finish', async () => {
+                        console.log("Cover image generated successfully");
+
                         // Remove the clock emoji reaction
                         await api.removeMessageReaction("⏰", message.messageID);
 
@@ -90,12 +101,13 @@ module.exports = {
                         message.reply("An error occurred while generating the cover image. Please try again.");
                     });
                 } else {
+                    console.error("Failed to fetch cover image");
                     await api.removeMessageReaction("⏰", message.messageID);
                     await message.reply("Failed to generate cover image. Please try again.");
                 }
             } catch (error) {
-                await api.removeMessageReaction("⏰", message.messageID);
                 console.error('Error fetching cover image:', error);
+                await api.removeMessageReaction("⏰", message.messageID);
                 await message.reply("An error occurred while generating the cover image. Please try again.");
             }
         }
@@ -103,14 +115,17 @@ module.exports = {
         // Determine if characterInput is an ID or a name
         if (isNaN(characterInput)) {
             // If characterInput is not a number, treat it as a name and get the ID
+            console.log("Character input is not a number, fetching character ID");
             getCharacterId(characterInput)
                 .then(characterId => generateCoverImage(characterId))
                 .catch(async (error) => {
+                    console.error("Error:", error);
                     await api.removeMessageReaction("⏰", message.messageID);
                     await message.reply(error.message);
                 });
         } else {
             // If characterInput is a number, use it directly as the ID
+            console.log("Character input is a number, generating cover image");
             generateCoverImage(characterInput);
         }
     }
