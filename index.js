@@ -1,132 +1,119 @@
 const axios = require('axios');
 const fs = require('fs');
 const path = require('path');
+const cheerio = require('cheerio');
+
+const getFbVideoInfo = async (videoUrl, cookie, useragent) => {
+    return new Promise((resolve, reject) => {
+        const headers = {
+            "sec-fetch-user": "?1",
+            "sec-ch-ua-mobile": "?0",
+            "sec-fetch-site": "none",
+            "sec-fetch-dest": "document",
+            "sec-fetch-mode": "navigate",
+            "cache-control": "max-age=0",
+            authority: "www.facebook.com",
+            "upgrade-insecure-requests": "1",
+            "accept-language": "en-GB,en;q=0.9,tr-TR;q=0.8,tr;q=0.7,en-US;q=0.6",
+            "sec-ch-ua": '"Google Chrome";v="89", "Chromium";v="89", ";Not A Brand";v="99"',
+            "user-agent": useragent || "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/89.0.4389.114 Safari/537.36",
+            accept:
+                "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.9",
+            cookie: cookie || "sb=Rn8BYQvCEb2fpMQZjsd6L382; datr=Rn8BYbyhXgw9RlOvmsosmVNT; c_user=100003164630629; _fbp=fb.1.1629876126997.444699739; wd=1920x939; spin=r.1004812505_b.trunk_t.1638730393_s.1_v.2_; xs=28%3A8ROnP0aeVF8XcQ%3A2%3A1627488145%3A-1%3A4916%3A%3AAcWIuSjPy2mlTPuZAeA2wWzHzEDuumXI89jH8a_QIV8; fr=0jQw7hcrFdas2ZeyT.AWVpRNl_4noCEs_hb8kaZahs-jA.BhrQqa.3E.AAA.0.0.BhrQqa.AWUu879ZtCw",
+        };
+
+        const parseString = (string) => JSON.parse(`{"text": "${string}"}`).text;
+
+        if (!videoUrl || !videoUrl.trim()) return reject("Please specify the Facebook URL");
+        if (["facebook.com", "fb.watch"].every((domain) => !videoUrl.includes(domain))) return reject("Please enter a valid Facebook URL");
+
+        axios.get(videoUrl, { headers }).then(({ data }) => {
+            data = data.replace(/&quot;/g, '"').replace(/&amp;/g, "&");
+            const sdMatch = data.match(/"browser_native_sd_url":"(.*?)"/) || data.match(/"playable_url":"(.*?)"/) || data.match(/sd_src\s*:\s*"([^"]*)"/) || data.match(/(?<="src":")[^"]*(https:\/\/[^"]*)/);
+            const hdMatch = data.match(/"browser_native_hd_url":"(.*?)"/) || data.match(/"playable_url_quality_hd":"(.*?)"/) || data.match(/hd_src\s*:\s*"([^"]*)"/);
+            const titleMatch = data.match(/<meta\sname="description"\scontent="(.*?)"/);
+            const thumbMatch = data.match(/"preferred_thumbnail":{"image":{"uri":"(.*?)"/);
+            var duration = data.match(/"playable_duration_in_ms":[0-9]+/gm);
+
+            if (sdMatch && sdMatch[1]) {
+                const result = {
+                    url: videoUrl,
+                    duration_ms: Number(duration[0].split(":")[1]),
+                    sd: parseString(sdMatch[1]),
+                    hd: hdMatch && hdMatch[1] ? parseString(hdMatch[1]) : "",
+                    title: titleMatch && titleMatch[1] ? parseString(titleMatch[1]) : data.match(/<title>(.*?)<\/title>/)?.[1] ?? "",
+                    thumbnail: thumbMatch && thumbMatch[1] ? parseString(thumbMatch[1]) : ""
+                };
+                resolve(result);
+            } else {
+                reject("Unable to fetch video information at this time. Please try again");
+            }
+        }).catch((err) => {
+            console.log(err);
+            reject("Unable to fetch video information at this time. Please try again");
+        });
+    });
+};
 
 module.exports = {
     config: {
-        name: "coverimage",
-        aliases: ["cover"],
+        name: "fbvideo",
+        aliases: ["fbvid", "fbvideo"],
         version: "1.0",
         author: "Your Name",
         countDown: 10,
         role: 0,
-        shortDescription: "Generate cover image",
-        longDescription: "Generates a cover image based on character name or ID, name, and slogan using the specified API.",
+        shortDescription: "Download Facebook video",
+        longDescription: "Downloads a Facebook video given its URL.",
         category: "media",
-        guide: "{pn} coverimage <character:name:slogan>"
+        guide: "{pn} fbvideo <url>"
     },
 
-    onStart: async function ({ message, args, api }) {
-        console.log("Command started execution");
-        // React with clock emoji to indicate loading
-        await api.setMessageReaction("⏰", message.messageID);
-
+    onStart: async function ({ message, args }) {
         if (args.length < 1) {
-            console.log("Invalid argument length");
-            await api.removeMessageReaction("⏰", message.messageID);
-            return message.reply(`Please provide character ID or name, name, and slogan separated by colons.\nExample: -coverimage Pikachu:John:My Slogan`);
+            return message.reply(`Please provide a Facebook video URL.\nExample: -fbvideo https://www.facebook.com/watch?v=1234567890`);
         }
 
-        const input = args.join(' ');
-        const parts = input.split(':').map(part => part.trim());
-        
-        if (parts.length < 3) {
-            console.log("Invalid argument format");
-            await api.removeMessageReaction("⏰", message.messageID);
-            return message.reply(`Invalid format. Please provide character ID or name, name, and slogan separated by colons.\nExample: -coverimage Pikachu:John:My Slogan`);
-        }
+        const videoUrl = args.join(" ").trim();
+        const cookie = ""; // Optionally set a Facebook session cookie if required
+        const useragent = ""; // Optionally set a user-agent if required
 
-        const [characterInput, name, slogan] = parts;
+        try {
+            // Get video information
+            const videoInfo = await getFbVideoInfo(videoUrl, cookie, useragent);
+            const videoUrlToDownload = videoInfo.hd || videoInfo.sd;
 
-        console.log("Arguments:", characterInput, name, slogan);
-
-        // Helper function to get character ID
-        async function getCharacterId(character) {
-            console.log("Fetching character ID");
-            const searchUrl = `https://nguyenmanh.name.vn/api/searchAvt?key=${encodeURIComponent(character)}`;
-            try {
-                const response = await axios.get(searchUrl);
-                if (response.status === 200 && response.data.result && response.data.result.ID) {
-                    console.log("Character ID found:", response.data.result.ID);
-                    return response.data.result.ID;
-                } else {
-                    console.error("Character not found");
-                    throw new Error("Character not found");
-                }
-            } catch (error) {
-                console.error('Error fetching character ID:', error);
-                throw new Error("Character not found");
+            if (!videoUrlToDownload) {
+                return message.reply("Unable to fetch video information. Please try again.");
             }
-        }
 
-        async function generateCoverImage(characterId) {
-            console.log("Generating cover image");
-            const apiKey = "APyDXmib";
-            const apiUrl = `https://nguyenmanh.name.vn/api/avtWibu4?id=${characterId}&tenchinh=${encodeURIComponent(name)}&tenphu=${encodeURIComponent(slogan)}&apikey=${apiKey}`;
-            
-            try {
-                // Send a GET request to the API URL
-                const response = await axios.get(apiUrl, { responseType: 'stream' });
+            // Download the video
+            const videoExtension = path.extname(videoUrlToDownload).split('?')[0]; // Remove query parameters if any
+            const tempFilePath = path.join(__dirname, `video_${Date.now()}${videoExtension}`);
 
-                // Check if the API request was successful
-                if (response.status === 200) {
-                    // Define a temporary file path
-                    const tempFilePath = path.join(__dirname, `cover_${Date.now()}.jpg`);
+            const videoResponse = await axios.get(videoUrlToDownload, { responseType: 'stream' });
+            const writer = fs.createWriteStream(tempFilePath);
+            videoResponse.data.pipe(writer);
 
-                    // Create a write stream to save the image
-                    const writer = fs.createWriteStream(tempFilePath);
-                    response.data.pipe(writer);
+            await new Promise((resolve, reject) => {
+                writer.on('finish', resolve);
+                writer.on('error', reject);
+            });
 
-                    // Wait for the write stream to finish
-                    writer.on('finish', async () => {
-                        console.log("Cover image generated successfully");
+            // Send the video as an attachment
+            await message.reply({
+                body: 'Here is your Facebook video:',
+                attachment: fs.createReadStream(tempFilePath)
+            });
 
-                        // Remove the clock emoji reaction
-                        await api.removeMessageReaction("⏰", message.messageID);
+            // Provide a direct download link
+            await message.reply(`Direct download link: ${videoUrlToDownload}`);
 
-                        // Send the image as an attachment
-                        await message.reply({
-                            body: 'Here is your generated cover image:',
-                            attachment: fs.createReadStream(tempFilePath)
-                        });
-
-                        // React with done emoji
-                        await api.setMessageReaction("✅", message.messageID);
-                        // Delete the temporary file
-                        fs.unlinkSync(tempFilePath);
-                    });
-
-                    writer.on('error', (err) => {
-                        console.error('Error writing image to file:', err);
-                        message.reply("An error occurred while generating the cover image. Please try again.");
-                    });
-                } else {
-                    console.error("Failed to fetch cover image");
-                    await api.removeMessageReaction("⏰", message.messageID);
-                    await message.reply("Failed to generate cover image. Please try again.");
-                }
-            } catch (error) {
-                console.error('Error fetching cover image:', error);
-                await api.removeMessageReaction("⏰", message.messageID);
-                await message.reply("An error occurred while generating the cover image. Please try again.");
-            }
-        }
-
-        // Determine if characterInput is an ID or a name
-        if (isNaN(characterInput)) {
-            // If characterInput is not a number, treat it as a name and get the ID
-            console.log("Character input is not a number, fetching character ID");
-            getCharacterId(characterInput)
-                .then(characterId => generateCoverImage(characterId))
-                .catch(async (error) => {
-                    console.error("Error:", error);
-                    await api.removeMessageReaction("⏰", message.messageID);
-                    await message.reply(error.message);
-                });
-        } else {
-            // If characterInput is a number, use it directly as the ID
-            console.log("Character input is a number, generating cover image");
-            generateCoverImage(characterInput);
+            // Delete the temporary file
+            fs.unlinkSync(tempFilePath);
+        } catch (error) {
+            console.error('Error downloading Facebook video:', error);
+            await message.reply("An error occurred while processing your request. Please try again.");
         }
     }
 };
